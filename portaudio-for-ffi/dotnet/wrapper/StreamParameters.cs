@@ -7,6 +7,7 @@ namespace PortAudioCSharp.Wrapper;
 public sealed class StreamParameters(int device, int channelCount, nuint sampleFormat, double suggestedLatency, GCHandle? hostApiSpecificStreamInfo = null, bool leaveOpen = false) : IDisposable
 {
     private bool _disposed;
+    private PaStreamParameters? _paStreamParameters = null;
     public bool LeaveOpen { get; } = leaveOpen;
     public int Device { get; } = device;
     public int ChannelCount { get; } = channelCount;
@@ -16,7 +17,7 @@ public sealed class StreamParameters(int device, int channelCount, nuint sampleF
 
     internal unsafe PaStreamParameters ToPaStreamParameters()
     {
-        return new PaStreamParameters()
+        _paStreamParameters ??= new PaStreamParameters()
         {
             device = Device,
             channelCount = ChannelCount,
@@ -24,15 +25,22 @@ public sealed class StreamParameters(int device, int channelCount, nuint sampleF
             suggestedLatency = SuggestedLatency,
             hostApiSpecificStreamInfo = HostApiSpecificStreamInfo.HasValue ? HostApiSpecificStreamInfo.Value.AddrOfPinnedObject().ToPointer() : (void*)nuint.Zero
         };
+        return _paStreamParameters.Value;
     }
 
     public void Dispose()
     {
-        if (!_disposed && !LeaveOpen)
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (!LeaveOpen)
         {
             if (HostApiSpecificStreamInfo != null && HostApiSpecificStreamInfo.Value.IsAllocated)
                 HostApiSpecificStreamInfo?.Free();
         }
+        _paStreamParameters = null;
         _disposed = true;
     }
 }
