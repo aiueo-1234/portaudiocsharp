@@ -13,7 +13,7 @@ fn main() {
         .default_enum_style(bindgen::EnumVariation::Rust {
             non_exhaustive: false,
         })
-        .allowlist_item("PaHostApiTypeId|PaErrorCode|PaStreamCallbackResult|paFramesPerBufferUnspecified")
+        .allowlist_item("PaHostApiTypeId|PaErrorCode|PaStreamCallbackResult|paFramesPerBufferUnspecified|paFormatIsSupported")
         .generate()
         .unwrap()
         .write_to_file("src/portaudio_enum.rs")
