@@ -35,7 +35,7 @@ public sealed class PortAudioService : IPortAudioService
 
     internal void Initialize()
     {
-        PortAudioException.ThrowIfError(PortAudioWrapper.Initialize());
+        PortAudioWrapper.Initialize();
         _isInitialized = true;
     }
 
@@ -43,7 +43,7 @@ public sealed class PortAudioService : IPortAudioService
     {
         if (_isInitialized)
         {
-            PortAudioException.ThrowIfError(PortAudioWrapper.Terminate());
+            PortAudioWrapper.Terminate();
         }
         _isInitialized = false;
     }

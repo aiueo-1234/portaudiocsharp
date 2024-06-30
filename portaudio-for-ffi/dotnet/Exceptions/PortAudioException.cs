@@ -20,7 +20,7 @@ public class PortAudioException : Exception
         }
     }
 
-    public static void ThrowIfError(int value)
+    public static void ThrowIfError(in int value)
     {
         if (Enum.IsDefined(typeof(PaErrorCode), value))
         {
