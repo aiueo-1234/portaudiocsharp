@@ -20,7 +20,7 @@ public ref struct DeviceInfo
 
     internal unsafe DeviceInfo(PaDeviceInfo* paDeviceInfo)
     {
-        if ((nint)(&paDeviceInfo) == nint.Zero)
+        if ((nint)paDeviceInfo != nint.Zero)
         {
             StructVersion = paDeviceInfo->structVersion;
             Name = Helper.ConvertROS(paDeviceInfo->name);
