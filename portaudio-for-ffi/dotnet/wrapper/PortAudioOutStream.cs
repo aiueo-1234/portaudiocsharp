@@ -10,17 +10,19 @@ namespace PortAudioCSharp.Wrapper;
 
 internal unsafe class PortAudioOutStrem : IDisposable
 {
+    private bool _freed;
     private bool _disposed;
     private readonly CancellationTokenSource cancellationTokenSource = new();
     private bool _isInitialized = false;
     private readonly void* _stream = NativeMemory.AllocZeroed((nuint)sizeof(void*));
     private readonly int _deviceIndex;
-    private StreamParameters _outputParameter;
+    private readonly StreamParameters _outputParameter;
     private readonly double _sampleRate;
     private readonly PaStreamFlags _streamFlag;
 
     public PortAudioOutStrem(int deviceIndex, StreamParameters outputPatameter, double sampleRate, PaStreamFlags streamFlags)
     {
+        ArgumentNullException.ThrowIfNull(outputPatameter, nameof(outputPatameter));
         _deviceIndex = deviceIndex;
         _outputParameter = outputPatameter;
         _sampleRate = sampleRate;
@@ -30,13 +32,20 @@ internal unsafe class PortAudioOutStrem : IDisposable
 
     private void Initialize()
     {
-        var parameter = _outputParameter.ToPaStreamParameters();
-        PortAudioException.ThrowIfError(NativeMethods.Pa_IsFormatSupported((PaStreamParameters*)nint.Zero, &parameter, _sampleRate));
-        fixed (void** pStream = &_stream)
+        if (PortAudioWrapper.IsFormatSupported(null, _outputParameter, _sampleRate))
         {
-            PortAudioException.ThrowIfError(NativeMethods.Pa_OpenStream(pStream, (PaStreamParameters*)nint.Zero, &parameter, _sampleRate, new CULong(NativeConsts.paFramesPerBufferUnspecified), new CULong((uint)_streamFlag), &StreamCallBack, (void*)nint.Zero));
+            var parameter = _outputParameter.ToPaStreamParameters();
+            fixed (void** pStream = &_stream)
+            {
+                PortAudioException.ThrowIfError(NativeMethods.Pa_OpenStream(pStream, (PaStreamParameters*)nint.Zero, &parameter, _sampleRate, new CULong(NativeConsts.paFramesPerBufferUnspecified), new CULong((uint)_streamFlag), &StreamCallBack, (void*)nint.Zero));
+            }
+            _isInitialized = true;
         }
-        _isInitialized = true;
+        else {
+            NativeMemory.Free(_stream);
+            _freed = true;
+            PortAudioException.Throw(PaErrorCode.paSampleFormatNotSupported);
+        }
     }
 
     public void Dispose()
@@ -60,7 +69,11 @@ internal unsafe class PortAudioOutStrem : IDisposable
         {
             PortAudioException.ThrowIfError(NativeMethods.Pa_CloseStream(_stream));
         }
-        NativeMemory.Free(_stream);
+        if (!_freed)
+        {
+            NativeMemory.Free(_stream);
+        }
+        _freed = true;
         _disposed = true;
         _isInitialized = true;
     }
