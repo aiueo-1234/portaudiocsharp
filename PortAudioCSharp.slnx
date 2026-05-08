@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/portaudio-for-ffi/">
+    <Project Path="portaudio-for-ffi/dotnet/PortAudioCSharp.Unsafe.csproj" />
+  </Folder>
+  <Folder Name="/sandbox/">
+    <Project Path="sandbox/ConsoleApp1/ConsoleApp1.csproj" />
+  </Folder>
+  <Project Path="PortAudioCSharp/PortAudioCSharp.csproj" />
+</Solution>
