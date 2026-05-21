@@ -24,6 +24,7 @@ public sealed class PortAudioService : IPortAudioService
     public HostApi DefaultHostApi { get; }
     public PortAudioDevice DefaultInputDevice { get; }
     public PortAudioDevice DefaultOutputDevice { get; }
+    public VersionInfo VersionInfo { get; }
 
     public PortAudioService()
     {
@@ -31,6 +32,7 @@ public sealed class PortAudioService : IPortAudioService
         DefaultHostApi = new HostApi();
         DefaultInputDevice = new PortAudioDevice(PortAudioWrapper.GetDefaultInputDevice());
         DefaultOutputDevice = new PortAudioDevice(PortAudioWrapper.GetDefaultOutputDevice());
+        VersionInfo = PortAudioWrapper.GetVersionInfo();
     }
 
     internal void Initialize()
