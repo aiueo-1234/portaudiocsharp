@@ -5,7 +5,7 @@ namespace PortAudioCSharp.Devices;
 
 public class PortAudioDevice
 {
-    private int _deviceIndex = (int)PaDeviceIndex.paNoDevice;
+    internal readonly int _deviceIndex;
     public string Name { get; }
     public HostApi HostApi { get; }
 
@@ -26,6 +26,10 @@ public class PortAudioDevice
         _deviceIndex = deviceIndex;
         HostApi = hostApi;
         var deviceInfo = PortAudioWrapper.GetDeviceInfo(deviceIndex);
+        if (deviceInfo.HostApi != hostApi._hostApiIndex)
+        {
+            throw new ArgumentException($"Device {deviceIndex} does not belong to HostApi {hostApi.Name}");
+        }
         Name = UnicodeEncoding.Default.GetString(deviceInfo.Name);
         MaxInputChannels = deviceInfo.MaxInputChannels;
         MaxOutputChannels = deviceInfo.MaxOutputChannels;

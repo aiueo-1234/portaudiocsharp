@@ -8,7 +8,7 @@ namespace PortAudioCSharp;
 
 public class HostApi
 {
-    private int _hostApiIndex;
+    internal readonly int _hostApiIndex;
     public PaHostApiTypeId Type { get; }
     public string Name { get; }
     public int DeviceCount { get; }
