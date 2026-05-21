@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -8,7 +9,23 @@ using PortAudioCSharp.Exceptions;
 [assembly: InternalsVisibleTo("PortAudioCSharp")]
 namespace PortAudioCSharp.Wrapper;
 
-internal unsafe class PortAudioOutStrem : IDisposable
+internal class UserData
+{
+    public Stream Reader { get; }
+    public StreamParameters OutputParameter { get; }
+    public double SampleRate { get; }
+    public PaStreamFlags StreamFlags { get; }
+
+    public UserData(Stream reader, StreamParameters outputParameter, double sampleRate, PaStreamFlags streamFlags)
+    {
+        Reader = reader;
+        OutputParameter = outputParameter;
+        SampleRate = sampleRate;
+        StreamFlags = streamFlags;
+    }
+}
+
+public unsafe class PortAudioOutStrem : IDisposable
 {
     private bool _freed;
     private bool _disposed;
@@ -19,14 +36,21 @@ internal unsafe class PortAudioOutStrem : IDisposable
     private readonly StreamParameters _outputParameter;
     private readonly double _sampleRate;
     private readonly PaStreamFlags _streamFlag;
+    private readonly Stream _reader;
+    private readonly UserData _userData;
+    private readonly GCHandle _userDataHandle;
 
-    public PortAudioOutStrem(int deviceIndex, StreamParameters outputPatameter, double sampleRate, PaStreamFlags streamFlags)
+    public PortAudioOutStrem(int deviceIndex, StreamParameters outputPatameter, double sampleRate, PaStreamFlags streamFlags, Stream reader)
     {
         ArgumentNullException.ThrowIfNull(outputPatameter, nameof(outputPatameter));
+        ArgumentNullException.ThrowIfNull(reader, nameof(reader));
         _deviceIndex = deviceIndex;
         _outputParameter = outputPatameter;
         _sampleRate = sampleRate;
         _streamFlag = streamFlags;
+        _reader = reader;
+        _userData = new UserData(reader, outputPatameter, sampleRate, streamFlags);
+        _userDataHandle = GCHandle.Alloc(_userData, GCHandleType.Normal);
         Initialize();
     }
 
@@ -37,15 +61,34 @@ internal unsafe class PortAudioOutStrem : IDisposable
             var parameter = _outputParameter.ToPaStreamParameters();
             fixed (void** pStream = &_stream)
             {
-                PortAudioException.ThrowIfError(NativeMethods.Pa_OpenStream(pStream, (PaStreamParameters*)nint.Zero, &parameter, _sampleRate, new CULong(NativeConsts.paFramesPerBufferUnspecified), new CULong((uint)_streamFlag), &StreamCallBack, (void*)nint.Zero));
+                var result = NativeMethods.Pa_OpenStream(
+                    pStream,
+                    (PaStreamParameters*)nint.Zero,
+                    &parameter, _sampleRate,
+                    new CULong(NativeConsts.paFramesPerBufferUnspecified),
+                    new CULong((uint)_streamFlag),
+                    &StreamCallBack,
+                    (void*)GCHandle.ToIntPtr(_userDataHandle));
+                PortAudioException.ThrowIfError(result);
             }
             _isInitialized = true;
         }
-        else {
+        else
+        {
             NativeMemory.Free(_stream);
+            _userDataHandle.Free();
             _freed = true;
             PortAudioException.Throw(PaErrorCode.paSampleFormatNotSupported);
         }
+    }
+
+    public void Start()
+    {
+        if (!_isInitialized)
+        {
+            throw new InvalidOperationException("Stream is not initialized.");
+        }
+        PortAudioException.ThrowIfError(NativeMethods.Pa_StartStream(_stream));
     }
 
     public void Dispose()
@@ -71,13 +114,61 @@ internal unsafe class PortAudioOutStrem : IDisposable
         }
         if (!_freed)
         {
-            NativeMemory.Free(_stream);
+            if(!_isInitialized)
+            {
+                NativeMemory.Free(_stream);
+            }
+            _userDataHandle.Free();
         }
         _freed = true;
         _disposed = true;
-        _isInitialized = true;
+        _isInitialized = false;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static int StreamCallBack(void* input, void* output, CULong frameCount, PaStreamCallbackTimeInfo* timeInfo, CULong statusFlag, void* userData) => (int)PaStreamCallbackResult.paComplete;
+    private static unsafe int StreamCallBack(void* inputBuffer, void* outputBuffer, CULong framesPerBuffer, PaStreamCallbackTimeInfo* timeInfo, CULong statusFlag, void* userData)
+    {
+        var userDataObj = (UserData)GCHandle.FromIntPtr((IntPtr)userData).Target!;
+        PaStreamCallbackResult Process<T>() where T : unmanaged
+        {
+            // Calculate required byte length: frames * channels * bytesPerSample
+            var channels = userDataObj.OutputParameter.ChannelCount;
+            var bytesPerSample = sizeof(T);
+            var bytesNeeded = checked((int)framesPerBuffer.Value * channels * bytesPerSample);
+
+            var outputSpan = new Span<byte>(outputBuffer, bytesNeeded);
+
+            // Read from the source stream into the output buffer
+            var readResult = userDataObj.Reader.Read(outputSpan);
+
+            // No data available -> output silence and finish
+            if (readResult == 0)
+            {
+                outputSpan.Clear();
+                return PaStreamCallbackResult.paComplete;
+            }
+
+            // Partial read -> zero the remainder and finish
+            if (readResult < outputSpan.Length)
+            {
+                outputSpan.Slice(readResult).Clear();
+                return PaStreamCallbackResult.paComplete;
+            }
+
+            return PaStreamCallbackResult.paContinue;
+        }
+        if (userDataObj.OutputParameter.SampleFormat == (nuint)PaSampleFormat.paFloat32)
+        {
+            return (int)Process<float>();
+        }
+        else if (userDataObj.OutputParameter.SampleFormat == (nuint)PaSampleFormat.paInt16)
+        {
+            return (int)Process<short>();
+        }
+        else
+        {
+            // Unsupported format
+            return (int)PaStreamCallbackResult.paAbort;
+        }
+    }
 }

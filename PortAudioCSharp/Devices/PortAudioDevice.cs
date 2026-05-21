@@ -5,7 +5,7 @@ namespace PortAudioCSharp.Devices;
 
 public class PortAudioDevice
 {
-    internal readonly int _deviceIndex;
+    public readonly int _deviceIndex;
     public string Name { get; }
     public HostApi HostApi { get; }
 

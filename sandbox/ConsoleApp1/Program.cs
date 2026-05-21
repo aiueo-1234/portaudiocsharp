@@ -12,24 +12,13 @@ using var service = new PortAudioService();
 var hostApi = service.DefaultHostApi;
 Console.WriteLine(hostApi.Name);
 
-foreach (var h in service.GetAllHostApi())
-{
-    Console.WriteLine($"{h.Name}: Device {h.DeviceCount}");
+var device = service.DefaultOutputDevice;
+Console.WriteLine(device.Name);
 
-    Console.WriteLine(h.DefaultInputDevice != null ? h.DefaultInputDevice.Name : "None");
-    Console.WriteLine(h.DefaultOutputDevice != null ? h.DefaultOutputDevice.Name : "None");
-
-    Console.WriteLine($"{h.Name}のデバイス一覧");
-    foreach (var device in h.GetAllDevice())
-    {
-        Console.WriteLine(device.Name);
-    }
-}
-Console.WriteLine("すべてのデバイス");
-foreach (var d in service.GetAllDevice())
-{
-    Console.WriteLine($"{d.Name}: HostApi {d.HostApi.Name}");
-}
+using var parameter = new StreamParameters(device._deviceIndex, 2, (nuint)PaSampleFormat.paInt16, device.DefaultLowOutputLatency);
+using var stream = new PortAudioOutStrem(device._deviceIndex, parameter, 44100, PaStreamFlags.paNoFlag, new WaveFileReader(args[0]).Stream);
+stream.Start();
+await Task.Delay(3*60*1000);
 
 static IntPtr DllImportResolver(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
 {
